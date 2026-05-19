@@ -1,76 +1,45 @@
 import pygame
-import random 
+from config import SCREEN_W, SCREEN_H
+from game_objects import load_player_animations, load_tree_image, spawn_tree
 
+# Инициализация Pygame и окна
 pygame.init()
 time = pygame.time.Clock() 
-
-screen = pygame.display.set_mode((1518, 704))
+screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
 pygame.display.set_caption("Lumber Simulator") 
-icon = pygame.image.load('pictures/main.png') 
-pygame.display.set_icon(icon) 
+pygame.display.set_icon(pygame.image.load('pictures/main.png')) 
 
+# Загрузка ресурсов
 bg = pygame.image.load('pictures/bg.png').convert() 
-
-W, H = 100, 150 
-TREE_W, TREE_H = 150, 300  
-derevo = pygame.image.load('pictures/derevo.png')
-derevo = pygame.transform.smoothscale(derevo, (TREE_W, TREE_H))
-
-# Анимации
-walk_right = [
-    pygame.transform.smoothscale(pygame.image.load('pictures/goright/playerGoright1.png'), (W, H)),
-    pygame.transform.smoothscale(pygame.image.load('pictures/goright/playerGoright2.png'), (W, H)),
-    pygame.transform.smoothscale(pygame.image.load('pictures/goright/playerGoright3.png'), (W, H)),
-]
-walk_left = [
-    pygame.transform.smoothscale(pygame.image.load('pictures/goleft/playerGoleft1.png'), (W, H)),
-    pygame.transform.smoothscale(pygame.image.load('pictures/goleft/playerGoleft2.png'), (W, H)),
-    pygame.transform.smoothscale(pygame.image.load('pictures/goleft/playerGoleft3.png'), (W, H)),
-]
-walk_stay = [
-    pygame.transform.smoothscale(pygame.image.load('pictures/gostay/playerGostay1.png'), (W, H)),
-]
-
-# Список для хранения объектов pygame.Rect каждого заспавненного дерева
-derevo_list = []
-
-player_anim_count = 0   
-bg_x = 0  
-
-player_speed = 5  
-player_x = 150  
-player_y = 380
-
-is_jump = False 
-jump_count = 7
+derevo = load_tree_image()
+walk_right, walk_left, walk_stay = load_player_animations()
 
 bg_sound = pygame.mixer.Sound('sound/bgsound.mp3') 
 derevo_sound = pygame.mixer.Sound('sound/derevo.mp3')
 bg_sound.play() 
 
-running = True 
+# Игровые переменные 
+derevo_list = []
+player_anim_count = 0   
+bg_x = 0   
+player_speed = 5  
+player_x = 150  
+player_y = 380
+is_jump = False 
+jump_count = 7
 
-# Настройка таймера спавна 1000 мс = 1 с
+# Таймер
 derevo_timer = pygame.USEREVENT + 1
 pygame.time.set_timer(derevo_timer, 10000)
 
-while running:
-    # 1. ОБРАБОТКА СОБЫТИЙ 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+running = True 
 
-        # Спавн нового дерева по таймеру
-        if event.type == derevo_timer:
-            # Выбираем рандомный X прямо в момент спавна!
-            new_x = random.randint(-150, 1500)
-            # Создаем рект для нового дерева и добавляем в список
-            new_tree_rect = derevo.get_rect(topleft=(new_x, 220))
-            derevo_list.append(new_tree_rect)
+#  ФУНКЦИИ ИГРОВОГО ЦИКЛА 
 
+def handle_input():
+    """Функция для движения камеры при ходьбе"""
+    global bg_x
     keys = pygame.key.get_pressed()
-
-    # Смещение фона и ВСЕХ деревьев в списке при ходьбе
     if keys[pygame.K_LEFT]:
         bg_x += 10  
         for tree_rect in derevo_list:
@@ -80,69 +49,83 @@ while running:
         for tree_rect in derevo_list:
             tree_rect.x -= 10
 
+def update_logic():
+    """Вся физика: прыжки, бесшовный фон, анимация и рубка деревьев"""
+    global bg_x, player_x, player_y, is_jump, jump_count, player_anim_count
+    
     # Бесшовная прокрутка фона
-    if bg_x <= -1518:
-        bg_x += 1518
-    elif bg_x >= 1518:
-        bg_x -= 1518
+    if bg_x <= -SCREEN_W: bg_x += SCREEN_W
+    elif bg_x >= SCREEN_W: bg_x -= SCREEN_W
 
-    # 2. ОТРИСОВКА ФОНА (самый нижний слой)
-    screen.blit(bg, (bg_x, 0))
-    if bg_x < 0:
-        screen.blit(bg, (bg_x + 1518, 0))
-    else:
-        screen.blit(bg, (bg_x - 1518, 0))
-
-    # Обновляем хитбокс игрока для проверки коллизий
+    keys = pygame.key.get_pressed()
     player_rect = walk_left[0].get_rect(topleft=(player_x, player_y))
 
+    # Рубка деревьев
+    for tree_rect in derevo_list:
+        if player_rect.colliderect(tree_rect) and keys[pygame.K_SPACE]:
+            print("Дерево срублено!")
+            derevo_sound.play()
+            derevo_list.remove(tree_rect)
+            break 
 
-    # 3. ОТРИСОВКА ДЕРЕВЬЕВ И ПРОВЕРКА КОЛЛИЗИЙ (поверх фона)
-    if derevo_list:
-        for tree_rect in derevo_list:
-            screen.blit(derevo, tree_rect) # Рисуем дерево
-            
-            # Если игрок подошел к дереву и нажал ПРОБЕЛ
-            if player_rect.colliderect(tree_rect) and keys[pygame.K_SPACE]:
-                print("Дерево срублено!")
-                derevo_sound.play()
-                derevo_list.remove(tree_rect) # Удаляем этот конкретный хитбокс из списка
-                break # Обязательно выходим из цикла, чтобы не поломать перебор списка
-
-    # 4. ЛОГИКА И ОТРИСОВКА ПЕРСОНАЖА (поверх деревьев)
-    if keys[pygame.K_LEFT]: 
-        screen.blit(walk_left[player_anim_count], (player_x, player_y))
-        if player_x > 50:
-            player_x -= player_speed
-    elif keys[pygame.K_RIGHT]:  
-        screen.blit(walk_right[player_anim_count], (player_x, player_y))
-        if player_x < 500:
-            player_x += player_speed
-    else: 
-        screen.blit(walk_stay[0], (player_x, player_y))
+    # Движение игрока по экрану
+    if keys[pygame.K_LEFT] and player_x > 50:
+        player_x -= player_speed
+    elif keys[pygame.K_RIGHT] and player_x < 500:
+        player_x += player_speed
 
     # Логика прыжка
     if not is_jump:                         
-        if keys[pygame.K_UP]:
-            is_jump = True 
+        if keys[pygame.K_UP]: is_jump = True 
     else:
         if jump_count >= -7:
-            if jump_count > 0:
-                player_y -= (jump_count ** 2) / 2 
-            else:  
-                player_y += (jump_count ** 2) / 2 
+            modifier = 1 if jump_count > 0 else -1
+            player_y -= (jump_count ** 2) / 2 * modifier
             jump_count -= 1 
         else:
             is_jump = False
             jump_count = 7   
 
-    # Анимация
-    if player_anim_count == 2: 
-        player_anim_count = 0 
+    # Кадры анимации
+    player_anim_count = 0 if player_anim_count == 2 else player_anim_count + 1
+
+def draw_screen():
+    """Только отрисовка всего на экран"""
+    # Рисуем фон
+    screen.blit(bg, (bg_x, 0))
+    if bg_x < 0:
+        screen.blit(bg, (bg_x + SCREEN_W, 0))
     else:
-        player_anim_count += 1 
+        screen.blit(bg, (bg_x - SCREEN_W, 0))
+
+    # Рисуем деревья
+    for tree_rect in derevo_list:
+        screen.blit(derevo, tree_rect)
+
+    # Рисуем игрока в зависимости от нажатой кнопки
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT]: 
+        screen.blit(walk_left[player_anim_count], (player_x, player_y))
+    elif keys[pygame.K_RIGHT]:  
+        screen.blit(walk_right[player_anim_count], (player_x, player_y))
+    else: 
+        screen.blit(walk_stay[0], (player_x, player_y))
 
     pygame.display.update()
+
+
+# ГЛАВНЫЙ ЦИКЛ ИГРЫ 
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == derevo_timer:
+            derevo_list.append(spawn_tree(derevo))
+
+    handle_input()   # 1. Управление камерой
+    update_logic()   # 2. Расчет физики и коллизий
+    draw_screen()    # 3. Вывод на экран
+    
     time.tick(10)
 
 pygame.quit()

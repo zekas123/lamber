@@ -1,6 +1,8 @@
 import pygame
+
+# Заменили load_tree_image на get_random_tree
 from config import SCREEN_W, SCREEN_H
-from game_objects import load_player_animations, load_tree_image, spawn_tree
+from game_objects import load_player_animations, get_random_tree, spawn_tree
 
 # Инициализация Pygame и окна
 pygame.init()
@@ -11,7 +13,7 @@ pygame.display.set_icon(pygame.image.load('pictures/main.png'))
 
 # Загрузка ресурсов
 bg = pygame.image.load('pictures/bg.png').convert() 
-derevo = load_tree_image()
+
 walk_right, walk_left, walk_stay = load_player_animations()
 
 bg_sound = pygame.mixer.Sound('sound/bgsound.mp3') 
@@ -19,12 +21,13 @@ derevo_sound = pygame.mixer.Sound('sound/derevo.mp3')
 bg_sound.play() 
 
 # Игровые переменные 
+
 derevo_list = []
 player_anim_count = 0   
 bg_x = 0   
 player_speed = 5  
 player_x = 150  
-player_y = 380
+player_y = 500
 is_jump = False 
 jump_count = 7
 
@@ -42,11 +45,12 @@ def handle_input():
     keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT]:
         bg_x += 10  
-        for tree_rect in derevo_list:
+        # Распаковываем картинку и рект, двигаем только рект
+        for tree_img, tree_rect in derevo_list:
             tree_rect.x += 10
     elif keys[pygame.K_RIGHT]:
         bg_x -= 10  
-        for tree_rect in derevo_list:
+        for tree_img, tree_rect in derevo_list:
             tree_rect.x -= 10
 
 def update_logic():
@@ -61,11 +65,13 @@ def update_logic():
     player_rect = walk_left[0].get_rect(topleft=(player_x, player_y))
 
     # Рубка деревьев
-    for tree_rect in derevo_list:
-        if player_rect.colliderect(tree_rect) and keys[pygame.K_SPACE]:
-            print("Дерево срублено!")
+    for tree_tuple in derevo_list:
+        # tree_tuple[1] — это рект дерева
+        if player_rect.colliderect(tree_tuple[1]) and keys[pygame.K_SPACE]:
+        
+            print(f"Дерево срублено!")
             derevo_sound.play()
-            derevo_list.remove(tree_rect)
+            derevo_list.remove(tree_tuple)
             break 
 
     # Движение игрока по экрану
@@ -98,9 +104,9 @@ def draw_screen():
     else:
         screen.blit(bg, (bg_x - SCREEN_W, 0))
 
-    # Рисуем деревья
-    for tree_rect in derevo_list:
-        screen.blit(derevo, tree_rect)
+    # Рисуем деревья (у каждого своя собственная картинка и свой рект)
+    for tree_img, tree_rect in derevo_list:
+        screen.blit(tree_img, tree_rect)
 
     # Рисуем игрока в зависимости от нажатой кнопки
     keys = pygame.key.get_pressed()
@@ -120,7 +126,9 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         if event.type == derevo_timer:
-            derevo_list.append(spawn_tree(derevo))
+            current_tree_img = get_random_tree() 
+            current_tree_rect = spawn_tree(current_tree_img)
+            derevo_list.append((current_tree_img, current_tree_rect))
 
     handle_input()   # 1. Управление камерой
     update_logic()   # 2. Расчет физики и коллизий
